@@ -11,6 +11,7 @@ import jwt
 from .serializers import RegistrationEmailSerializer, RegistrationPasswordSerializer
 from .models import User
 from django.conf import settings
+from django.core.mail import send_mail, BadHeaderError
 
 
 @api_view(['GET', 'POST'])
@@ -35,7 +36,12 @@ def registration_email_view(request):
         relative_link = reverse('email-verify')
         absolute_link = f"http://{current_site}{relative_link}?token={token}"
 
-        return Response({"email": user.email, "verification_link": absolute_link}, status=status.HTTP_201_CREATED)
+        try:
+            send_mail('Verify your email', f"Hi from Book.com! Use the link below to verify your email \n {absolute_link}", "book@gmail.com", [f"{request.data['email']}"])
+        except BadHeaderError:
+            return Response({"error": "Invalid header"}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"email": user.email, "message": "verification link sent to your email"}, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET'])
