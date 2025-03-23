@@ -8,6 +8,8 @@ django = "*"
 psycopg2 = "*"
 djangorestframework = "*"
 djangorestframework-simplejwt = "*"
+redis = "*"
+celery = "*"
 
 [dev-packages]
 
