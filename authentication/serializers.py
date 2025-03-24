@@ -5,7 +5,7 @@ from .models import User
 class RegistrationEmailSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['email']
+        fields = ['email', 'first_name', 'last_name']
 
     def create(self, validated_data):
         email = validated_data.get('email')

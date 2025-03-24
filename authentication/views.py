@@ -81,6 +81,9 @@ def registration_password_view(request):
     except (jwt.InvalidTokenError, User.DoesNotExist):
         return Response({"error": "Token is invalid"}, status=status.HTTP_400_BAD_REQUEST)
 
+    if not user.is_verified:
+        return Response({"error": "User is not verified. Please verify your email before setting a password."}, status=status.HTTP_403_FORBIDDEN)
+
     serializer = RegistrationPasswordSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
