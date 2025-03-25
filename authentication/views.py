@@ -4,8 +4,8 @@ from django.urls import reverse
 from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.auth import authenticate
 from django.utils import timezone
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 import jwt
 from .serializers import RegistrationEmailSerializer, RegistrationPasswordSerializer
@@ -14,12 +14,13 @@ from django.conf import settings
 from django.core.mail import send_mail, BadHeaderError
 
 
-@api_view(['GET', 'POST'])
-@permission_classes([AllowAny])
-def registration_email_view(request):
-    if request.method == 'GET':
+class RegistrationEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
         return Response({"ok"})
-    elif request.method == 'POST':
+
+    def post(self, request):
         try:
             user = User.objects.get(email=request.data['email'])
             if user.is_verified:
@@ -44,10 +45,10 @@ def registration_email_view(request):
         return Response({"email": user.email, "message": "verification link sent to your email"}, status=status.HTTP_201_CREATED)
 
 
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def registration_email_verify_view(request):
-    if request.method == 'GET':
+class RegistrationEmailVerifyView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
         token = request.GET.get('token')
         if not token:
             return Response({"error": "Token is missing"}, status=status.HTTP_400_BAD_REQUEST)
@@ -66,72 +67,83 @@ def registration_email_verify_view(request):
             return Response({"error": "Token is invalid"}, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['PUT'])
-@permission_classes([AllowAny])
-def registration_password_view(request):
-    token = request.query_params.get('token')
-    if not token:
-        return Response({"error": "Token is required."}, status=status.HTTP_400_BAD_REQUEST)
+class RegistrationPasswordView(APIView):
+    permission_classes = [AllowAny]
 
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-        user = User.objects.get(id=payload['user_id'])
-    except jwt.ExpiredSignatureError:
-        return Response({"error": "Token is expired"}, status=status.HTTP_400_BAD_REQUEST)
-    except (jwt.InvalidTokenError, User.DoesNotExist):
-        return Response({"error": "Token is invalid"}, status=status.HTTP_400_BAD_REQUEST)
+    def put(self, request, *args, **kwargs):
+        token = request.query_params.get('token')
+        if not token:
+            return Response({"error": "Token is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not user.is_verified:
-        return Response({"error": "User is not verified. Please verify your email before setting a password."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+            user = User.objects.get(id=payload['user_id'])
+        except jwt.ExpiredSignatureError:
+            return Response({"error": "Token is expired"}, status=status.HTTP_400_BAD_REQUEST)
+        except (jwt.InvalidTokenError, User.DoesNotExist):
+            return Response({"error": "Token is invalid"}, status=status.HTTP_400_BAD_REQUEST)
 
-    serializer = RegistrationPasswordSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
+        if not user.is_verified:
+            return Response({"error": "User is not verified. Please verify your email before setting a password."}, status=status.HTTP_403_FORBIDDEN)
 
-    new_password = serializer.validated_data['password']
-    user.set_password(new_password)
-    user.save()
+        serializer = RegistrationPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-    return Response({"message": "Password updated successfully"}, status=status.HTTP_200_OK)
+        new_password = serializer.validated_data['password']
+        user.set_password(new_password)
+        user.save()
 
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def login_view(request):
-    email = request.data.get('email')
-    password = request.data.get('password')
-
-    if not email:
-        return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-    if not password:
-        return Response({"error": "Password is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-    user = authenticate(request, email=email, password=password)
-    if user is None:
-        return Response({"error": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
-
-    user.last_login = timezone.now()
-    user.save(update_fields=['last_login'])
-
-    refresh = RefreshToken.for_user(user)
-    access_token = refresh.access_token
-
-    return Response({
-        "access": str(access_token),
-        "refresh": str(refresh)
-    }, status=status.HTTP_200_OK)
+        return Response({"message": "Password updated successfully"}, status=status.HTTP_200_OK)
 
 
-@api_view(['POST'])
-def logout_view(request):
-    try:
-        refresh_token = request.data.get('refresh_token')
-        if not refresh_token:
-            return Response({"error": "refresh_token is required."}, status=status.HTTP_400_BAD_REQUEST)
+class LoginView(APIView):
+    permission_classes = [AllowAny]
 
-        token = RefreshToken(refresh_token)
-        token.blacklist()
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        password = request.data.get('password')
 
-        return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not password:
+            return Response({"error": "Password is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(request, email=email, password=password)
+        if user is None:
+            return Response({"error": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
+
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
+
+        return Response({
+            "access": str(access_token),
+            "refresh": str(refresh)
+        }, status=status.HTTP_200_OK)
+
+
+class LogoutView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            refresh_token = request.data.get('refresh_token')
+            if not refresh_token:
+                return Response(
+                    {"error": "refresh_token is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(
+                {"message": "Logged out successfully"},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
