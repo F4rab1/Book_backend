@@ -11,6 +11,7 @@ djangorestframework-simplejwt = "*"
 redis = "*"
 celery = "*"
 drf-nested-routers = "*"
+whitenoise = "*"
 
 [dev-packages]
 
